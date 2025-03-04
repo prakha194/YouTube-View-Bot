@@ -1,6 +1,6 @@
-Flask
 python-telegram-bot==20.0
 requests
 selenium
 webdriver-manager
-stem  # Tor for IP rotation
+stem  # For Tor proxy rotation
+Flask  # To keep Render web app alive
