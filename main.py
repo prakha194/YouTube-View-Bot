@@ -1,15 +1,15 @@
+import os
 import time
 import random
-import os
 import requests
 import subprocess
 from flask import Flask
 from threading import Thread
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, CallbackContext
-from config import TELEGRAM_BOT_TOKEN, YOUTUBE_CHANNEL_ID
+from config import TELEGRAM_BOT_TOKEN, YOUTUBE_CHANNEL_ID, OWNER_ID  # OWNER_ID = Your Telegram User ID
 
-# Flask app to keep bot running
+# Flask app to keep bot running on Render
 app = Flask(__name__)
 
 @app.route('/')
@@ -19,44 +19,29 @@ def home():
 # Store scheduled views
 scheduled_tasks = []
 
-# Start bot command
-def start(update: Update, context: CallbackContext) -> None:
-    update.message.reply_text(f"🔥 Prashant Khati's YouTube Boost Bot is LIVE! 🚀")
-
-# Stop bot command
-def stop(update: Update, context: CallbackContext) -> None:
-    update.message.reply_text(f"⏸️ Bot is paused! No views will be sent until you use /start.")
-
-# Windscribe login & IP rotation
-def windscribe_login():
-    username = os.getenv("WINDSCRIBE_USER")
-    password = os.getenv("WINDSCRIBE_PASS")
-    
-    if not username or not password:
-        print("❌ Windscribe credentials missing!")
-        return False
-
+# Function to login to Windscribe
+def login_windscribe():
     try:
-        subprocess.run(["windscribe", "login", username, password], check=True)
-        print("✅ Windscribe login successful!")
-        return True
+        user = os.getenv("WINDSCRIBE_USER")
+        password = os.getenv("WINDSCRIBE_PASS")
+        subprocess.run(["windscribe", "login", user, password], check=True)
+        print("✅ Logged into Windscribe")
     except Exception as e:
-        print(f"❌ Windscribe login failed: {e}")
-        return False
+        print("⚠️ Windscribe Login Failed:", e)
 
+# Function to change IP safely
 def change_ip():
-    if not windscribe_login():
-        return False
-    
     try:
+        subprocess.run(["windscribe", "disconnect"], check=True)
+        time.sleep(2)  # Short wait before reconnecting
         subprocess.run(["windscribe", "connect", "best"], check=True)
-        time.sleep(5)
+        time.sleep(random.randint(5, 10))  # Human-like delay
         return True
     except Exception as e:
-        print("❌ Failed to connect to Windscribe:", e)
+        print("⚠️ Failed to rotate IP:", e)
         return False
 
-# Get video list from YouTube API
+# Function to get video list from YouTube API
 def get_youtube_videos():
     api_url = f"https://www.googleapis.com/youtube/v3/search?key=YOUR_YOUTUBE_API_KEY&channelId={YOUTUBE_CHANNEL_ID}&part=id&order=date&type=video"
     response = requests.get(api_url).json()
@@ -64,25 +49,33 @@ def get_youtube_videos():
     videos = [f"https://www.youtube.com/watch?v={item['id']['videoId']}" for item in response.get("items", [])]
     return videos
 
-# Simulate a view
+# Function to simulate a view
 def watch_video(video_url):
     print(f"👀 Watching: {video_url}")
-    time.sleep(random.randint(30, 90))  # Simulate human watch time
+    time.sleep(random.randint(30, 90))  # Simulated watch time
 
-# Auto-view function (max 5 views/week)
+# Auto-view function
 def auto_view():
-    videos = get_youtube_videos()
-    if not videos:
-        print("No videos found!")
-        return
+    while True:
+        videos = get_youtube_videos()
+        if not videos:
+            print("⚠️ No videos found!")
+            return
 
-    weekly_views = random.randint(1, 5)
-    for _ in range(weekly_views):
-        video = random.choice(videos)
+        video = random.choice(videos)  # Random video to avoid pattern
         if change_ip():
             watch_video(video)
-            print(f"✅ View sent to {video}")
-            time.sleep(random.randint(600, 1800))  # Delay before next view
+            print("✅ View sent!")
+            time.sleep(random.randint(600, 1800))  # Random delay
+
+# Start bot command
+def start(update: Update, context: CallbackContext) -> None:
+    update.message.reply_text(f"🔥 Prashant Khati's YouTube Boost Bot is LIVE! 🚀")
+    context.bot.send_message(OWNER_ID, "✅ Bot Started & Running!")  # DM Owner
+
+# Stop bot command
+def stop(update: Update, context: CallbackContext) -> None:
+    update.message.reply_text(f"⏸️ Bot is paused! No views will be sent until you use /start.")
 
 # Handle /task command (Manual input)
 def task(update: Update, context: CallbackContext):
@@ -119,6 +112,7 @@ def telegram_bot():
 
 # Run bot & Flask server
 if __name__ == '__main__':
+    login_windscribe()  # Ensure Windscribe login before starting bot
+    Thread(target=auto_view).start()  # Keep default views running
     Thread(target=telegram_bot).start()
-    Thread(target=auto_view).start()  # Auto-viewing starts in the background
     app.run(host="0.0.0.0", port=8080)
