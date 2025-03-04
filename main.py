@@ -2,9 +2,18 @@ import time
 import random
 import requests
 import subprocess
+from flask import Flask
+from threading import Thread
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, CallbackContext
-from config import TELEGRAM_BOT_TOKEN, YOUTUBE_CHANNEL_ID, WINDSCRIBE_USERNAME, WINDSCRIBE_PASSWORD, MAX_VIEWS, USE_FREE_PROXIES
+from config import TELEGRAM_BOT_TOKEN, YOUTUBE_CHANNEL_ID
+
+# Flask app to keep bot running on Render
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "YouTube View Bot is Running!"
 
 # Store scheduled views
 scheduled_tasks = []
@@ -62,15 +71,19 @@ def task(update: Update, context: CallbackContext):
 # Handle /status command
 def status(update: Update, context: CallbackContext):
     if not scheduled_tasks:
-        update.message.reply_text("No scheduled views!")
+        update.message.reply_text("📌 No scheduled views for this week!")
     else:
-        message = "📊 Weekly Scheduled Views:\n"
-        for task in scheduled_tasks:
-            message += f"📺 {task['video']} → {task['views']} views ({task['date']})\n"
+        message = "📊 Weekly Scheduled Views:\n\n"
+        for idx, task in enumerate(scheduled_tasks, 1):
+            message += f"{idx}️⃣ {task['video']} → {task['views']} views ({task['date']})\n"
+        
+        total_views = sum(task['views'] for task in scheduled_tasks)
+        message += f"\n✅ Total Scheduled Views: {total_views}"
+        
         update.message.reply_text(message)
 
-# Set up the Telegram bot
-def main():
+# Telegram bot setup
+def telegram_bot():
     updater = Updater(TELEGRAM_BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
 
@@ -82,6 +95,7 @@ def main():
     updater.start_polling()
     updater.idle()
 
-# Run the bot
+# Run bot & Flask server
 if __name__ == '__main__':
-    main()
+    Thread(target=telegram_bot).start()
+    app.run(host="0.0.0.0", port=8080)
