@@ -7,15 +7,18 @@ from threading import Thread
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, CallbackContext
 import os
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.common.by import By
 
 # Load environment variables
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-YOUTUBE_CHANNEL_ID = os.getenv("YOUTUBE_CHANNEL_ID")
 ADMIN_USER_ID = os.getenv("ADMIN_USER_ID")  # Your Telegram user ID for DM
 WINDSCRIBE_USER = os.getenv("WINDSCRIBE_USER")
 WINDSCRIBE_PASS = os.getenv("WINDSCRIBE_PASS")
 
-# Flask app to keep bot running on Render
+# Flask app to keep bot running
 app = Flask(__name__)
 
 @app.route('/')
@@ -57,21 +60,33 @@ def change_ip():
         print("Failed to connect to Windscribe:", e)
         return False
 
-# Function to get latest Shorts videos from YouTube API
-def get_youtube_videos():
-    api_url = f"https://www.googleapis.com/youtube/v3/search?key={os.getenv('YOUTUBE_API_KEY')}&channelId={YOUTUBE_CHANNEL_ID}&part=id&order=date&type=video"
-    response = requests.get(api_url).json()
-    videos = [f"https://www.youtube.com/shorts/{item['id']['videoId']}" for item in response.get("items", [])]
-    return videos
-
-# Function to simulate a view
+# Function to watch Shorts video in browser
 def watch_video(video_url):
     print(f"👀 Watching: {video_url}")
-    time.sleep(random.randint(30, 90))  # Simulate human watch time
+    
+    # Setup Chrome browser
+    options = webdriver.ChromeOptions()
+    options.add_argument("--headless")  # Run in background
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    
+    try:
+        driver.get(video_url)
+        time.sleep(random.randint(30, 90))  # Simulate human watch time
+    except Exception as e:
+        print("Error watching video:", e)
+    finally:
+        driver.quit()
 
 # Auto-view function (Random 1-5 views per week)
 def auto_view():
-    videos = get_youtube_videos()
+    videos = [
+        "https://www.youtube.com/shorts/ABC123",  # Replace with real Shorts URLs
+        "https://www.youtube.com/shorts/XYZ456"
+    ]
+    
     if not videos:
         print("No videos found!")
         return
