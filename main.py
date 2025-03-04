@@ -5,15 +5,12 @@ import subprocess
 from flask import Flask
 from threading import Thread
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, CallbackContext
+from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageHandler, Filters, CallbackContext
 import os
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.common.by import By
 
 # Load environment variables
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+YOUTUBE_CHANNEL_ID = os.getenv("YOUTUBE_CHANNEL_ID")
 ADMIN_USER_ID = os.getenv("ADMIN_USER_ID")  # Your Telegram user ID for DM
 WINDSCRIBE_USER = os.getenv("WINDSCRIBE_USER")
 WINDSCRIBE_PASS = os.getenv("WINDSCRIBE_PASS")
@@ -25,17 +22,18 @@ app = Flask(__name__)
 def home():
     return "YouTube View Bot is Running!"
 
-# Store scheduled views
+# Store scheduled tasks
 scheduled_tasks = []
+user_inputs = {}
 
 # Start bot command
 def start(update: Update, context: CallbackContext) -> None:
-    update.message.reply_text(f"🔥 Prashant Khati's YouTube Boost Bot is LIVE! 🚀")
+    update.message.reply_text("🔥 Prashant Khati's YouTube Boost Bot is LIVE! 🚀")
     send_dm("✅ Bot has been started!")
 
 # Stop bot command
 def stop(update: Update, context: CallbackContext) -> None:
-    update.message.reply_text(f"⏸️ Bot is paused! No views will be sent until you use /start.")
+    update.message.reply_text("⏸️ Bot is paused! No views will be sent until you use /start.")
     send_dm("⏸️ Bot has been paused!")
 
 # Function to send DM to admin
@@ -60,72 +58,83 @@ def change_ip():
         print("Failed to connect to Windscribe:", e)
         return False
 
-# Function to watch Shorts video in browser
+# Function to get latest Shorts videos from YouTube API
+def get_youtube_videos():
+    api_url = f"https://www.googleapis.com/youtube/v3/search?key={os.getenv('YOUTUBE_API_KEY')}&channelId={YOUTUBE_CHANNEL_ID}&part=id&order=date&type=video&maxResults=5"
+    response = requests.get(api_url).json()
+    videos = [f"https://www.youtube.com/shorts/{item['id']['videoId']}" for item in response.get("items", [])]
+    return videos
+
+# Function to simulate a view
 def watch_video(video_url):
     print(f"👀 Watching: {video_url}")
-    
-    # Setup Chrome browser
-    options = webdriver.ChromeOptions()
-    options.add_argument("--headless")  # Run in background
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-    
-    try:
-        driver.get(video_url)
-        time.sleep(random.randint(30, 90))  # Simulate human watch time
-    except Exception as e:
-        print("Error watching video:", e)
-    finally:
-        driver.quit()
+    time.sleep(random.randint(30, 90))  # Simulate human watch time
 
-# Auto-view function (Random 1-5 views per week)
+# Auto-view function (Daily views for channel Shorts)
 def auto_view():
-    videos = [
-        "https://www.youtube.com/shorts/ABC123",  # Replace with real Shorts URLs
-        "https://www.youtube.com/shorts/XYZ456"
-    ]
-    
-    if not videos:
-        print("No videos found!")
-        return
+    while True:
+        videos = get_youtube_videos()
+        if not videos:
+            print("No videos found!")
+            time.sleep(3600)  # Wait 1 hour before retrying
+            continue
 
-    num_views = random.randint(1, 5)
-    for _ in range(num_views):
-        video = random.choice(videos)
-        if change_ip():
-            watch_video(video)
-            print("✅ View sent!")
-            time.sleep(random.randint(600, 1800))  # Delay before next view
+        num_views = random.randint(1, 5)
+        for _ in range(num_views):
+            video = random.choice(videos)
+            if change_ip():
+                watch_video(video)
+                print("✅ View sent!")
+                time.sleep(random.randint(600, 1800))  # Delay before next view
 
-# Handle /task command (Manual input)
+# Handle /task command (Step-by-step input)
 def task(update: Update, context: CallbackContext):
-    keyboard = [[InlineKeyboardButton("Submit Order", callback_data="submit_task")]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    update.message.reply_text("📌 Enter YouTube Shorts URL, Views & Date:", reply_markup=reply_markup)
+    user_id = update.message.chat_id
+    user_inputs[user_id] = {}
 
-# Handle manual order submission
-def submit_task(update: Update, context: CallbackContext):
+    update.message.reply_text("📌 Please enter the YouTube Shorts URL:")
+    return
+
+# Handle message input from users
+def handle_message(update: Update, context: CallbackContext):
+    user_id = update.message.chat_id
+    user_input = update.message.text
+
+    if user_id not in user_inputs:
+        return
+
+    if "url" not in user_inputs[user_id]:
+        user_inputs[user_id]["url"] = user_input
+        update.message.reply_text("📌 Enter number of views (Max: 5):")
+    elif "views" not in user_inputs[user_id]:
+        if not user_input.isdigit() or int(user_input) > 5:
+            update.message.reply_text("❌ Invalid number! Enter a number up to 5:")
+            return
+        user_inputs[user_id]["views"] = int(user_input)
+        update.message.reply_text("📅 Enter date & time (YYYY-MM-DD HH:MM):")
+    elif "datetime" not in user_inputs[user_id]:
+        user_inputs[user_id]["datetime"] = user_input
+
+        keyboard = [[InlineKeyboardButton("✅ Confirm Order", callback_data="confirm_order")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        update.message.reply_text(
+            f"✅ Order Summary:\n📌 URL: {user_inputs[user_id]['url']}\n👀 Views: {user_inputs[user_id]['views']}\n📅 Date & Time: {user_inputs[user_id]['datetime']}",
+            reply_markup=reply_markup
+        )
+
+# Handle manual order confirmation
+def confirm_order(update: Update, context: CallbackContext):
     query = update.callback_query
-    query.answer()
+    user_id = query.message.chat_id
 
-    user_input = query.message.text.split()
-    if len(user_input) < 3:
-        query.edit_message_text("❌ Invalid format! Please provide:\n\n📌 YouTube Shorts URL\n📌 Number of Views\n📌 Date")
-        return
-    
-    video_url = user_input[0]
-    num_views = int(user_input[1])
-    order_date = user_input[2]
+    if user_id in user_inputs:
+        order = user_inputs[user_id]
+        scheduled_tasks.append(order)
 
-    if num_views > 5:
-        query.edit_message_text("❌ Invalid number of views! Max allowed is 5.")
-        return
-
-    scheduled_tasks.append({"video": video_url, "views": num_views, "date": order_date})
-    query.edit_message_text(f"✅ Order Confirmed:\n{video_url}\n📌 {num_views} Views\n📅 {order_date}")
-    send_dm(f"📌 New Order Received:\n{video_url}\n👀 {num_views} Views\n📅 {order_date}")
+        query.edit_message_text(f"✅ Order Confirmed:\n📌 {order['url']}\n👀 {order['views']} Views\n📅 {order['datetime']}")
+        send_dm(f"📌 New Order Received:\n{order['url']}\n👀 {order['views']} Views\n📅 {order['datetime']}")
+        del user_inputs[user_id]  # Clear user data after confirmation
 
 # Handle /status command
 def status(update: Update, context: CallbackContext):
@@ -134,22 +143,12 @@ def status(update: Update, context: CallbackContext):
     else:
         message = "📊 Weekly Scheduled Views:\n\n"
         for idx, task in enumerate(scheduled_tasks, 1):
-            message += f"{idx}️⃣ {task['video']} → {task['views']} views ({task['date']})\n"
+            message += f"{idx}️⃣ {task['url']} → {task['views']} views ({task['datetime']})\n"
 
         total_views = sum(task['views'] for task in scheduled_tasks)
         message += f"\n✅ Total Scheduled Views: {total_views}"
 
         update.message.reply_text(message)
-
-# Handle /analytic command
-def analytic(update: Update, context: CallbackContext):
-    total_views = sum(task['views'] for task in scheduled_tasks)
-    update.message.reply_text(f"📊 Total All-Time Views Sent: {total_views}")
-
-# Handle /progress command
-def progress(update: Update, context: CallbackContext):
-    update.message.reply_text("⏳ Fetching real-time bot activity...")
-    send_dm("⏳ Progress requested!")
 
 # Handle /report command
 def report(update: Update, context: CallbackContext):
@@ -165,9 +164,9 @@ def telegram_bot():
     dp.add_handler(CommandHandler("stop", stop))
     dp.add_handler(CommandHandler("task", task))
     dp.add_handler(CommandHandler("status", status))
-    dp.add_handler(CommandHandler("analytic", analytic))
-    dp.add_handler(CommandHandler("progress", progress))
     dp.add_handler(CommandHandler("report", report))
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
+    dp.add_handler(CallbackQueryHandler(confirm_order, pattern="confirm_order"))
 
     updater.start_polling()
     updater.idle()
