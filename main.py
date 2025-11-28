@@ -5,11 +5,8 @@ import subprocess
 from flask import Flask
 from threading import Thread
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageHandler, Filters, CallbackContext
+from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageHandler, CallbackContext, filters
 import os
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager
 
 # Load environment variables
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -69,29 +66,28 @@ def get_youtube_videos():
     videos = [f"https://www.youtube.com/shorts/{item['id']['videoId']}" for item in response.get("items", [])]
     return videos
 
-# Function to ACTUALLY watch video with real browser
 # Function to ACTUALLY watch video with requests instead of browser
 def watch_video(video_url):
     print(f"👀 Sending view to: {video_url}")
-    
+
     try:
         # Use requests to actually visit the URL
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
-        
+
         # Actually make HTTP request to YouTube
         response = requests.get(video_url, headers=headers, timeout=30)
         print(f"✅ YouTube responded with status: {response.status_code}")
-        
+
         # Simulate watch time
         watch_time = random.randint(30, 90)
         print(f"⏱️ Simulating watch time: {watch_time} seconds")
         time.sleep(watch_time)
-        
+
         print("✅ View completed")
         return True
-        
+
     except Exception as e:
         print(f"❌ Error watching video: {e}")
         return False
@@ -189,7 +185,7 @@ def telegram_bot():
     dp.add_handler(CommandHandler("task", task))
     dp.add_handler(CommandHandler("status", status))
     dp.add_handler(CommandHandler("report", report))
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
+    dp.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     dp.add_handler(CallbackQueryHandler(confirm_order, pattern="confirm_order"))
 
     # Use webhook for Render
