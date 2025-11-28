@@ -192,12 +192,12 @@ def telegram_bot():
 
     # Use webhook for Render
     PORT = int(os.environ.get('PORT', 8080))
-    RENDER_EXTERNAL_URL = os.environ.get('RENDER_EXTERNAL_URL')
-
-    updater.start_webhook(listen="0.0.0.0",
-                          port=PORT,
-                          url_path="webhook",
-                          webhook_url=f"{RENDER_EXTERNAL_URL}/webhook")
+    
+    updater.start_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        url_path="webhook"
+    )
 
 # Run bot
 if __name__ == '__main__':
