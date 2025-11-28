@@ -7,13 +7,17 @@ from threading import Thread
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageHandler, Filters, CallbackContext
 import os
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
 
 # Load environment variables
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 YOUTUBE_CHANNEL_ID = os.getenv("YOUTUBE_CHANNEL_ID")
-ADMIN_USER_ID = os.getenv("ADMIN_USER_ID")  # Your Telegram user ID for DM
+ADMIN_USER_ID = os.getenv("ADMIN_USER_ID")
 WINDSCRIBE_USER = os.getenv("WINDSCRIBE_USER")
 WINDSCRIBE_PASS = os.getenv("WINDSCRIBE_PASS")
+YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 
 # Flask app to keep bot running
 app = Flask(__name__)
@@ -60,15 +64,49 @@ def change_ip():
 
 # Function to get latest Shorts videos from YouTube API
 def get_youtube_videos():
-    api_url = f"https://www.googleapis.com/youtube/v3/search?key={os.getenv('YOUTUBE_API_KEY')}&channelId={YOUTUBE_CHANNEL_ID}&part=id&order=date&type=video&maxResults=5"
+    api_url = f"https://www.googleapis.com/youtube/v3/search?key={YOUTUBE_API_KEY}&channelId={YOUTUBE_CHANNEL_ID}&part=id&order=date&type=video&maxResults=5"
     response = requests.get(api_url).json()
     videos = [f"https://www.youtube.com/shorts/{item['id']['videoId']}" for item in response.get("items", [])]
     return videos
 
-# Function to simulate a view
+# Function to ACTUALLY watch video with real browser
 def watch_video(video_url):
-    print(f"👀 Watching: {video_url}")
-    time.sleep(random.randint(30, 90))  # Simulate human watch time
+    print(f"👀 Actually watching: {video_url}")
+    
+    try:
+        # Setup Chrome options
+        chrome_options = Options()
+        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+        
+        # Initialize driver
+        driver = webdriver.Chrome(ChromeDriverManager().install(), options=chrome_options)
+        
+        # Actually visit the YouTube URL
+        driver.get(video_url)
+        print("✅ YouTube page loaded successfully")
+        
+        # Wait for video to load
+        time.sleep(10)
+        
+        # Scroll and simulate human behavior
+        driver.execute_script("window.scrollTo(0, 300);")
+        time.sleep(random.randint(25, 40))
+        
+        # Scroll more
+        driver.execute_script("window.scrollTo(0, 600);")
+        time.sleep(random.randint(20, 35))
+        
+        # Close browser
+        driver.quit()
+        print("✅ Real view completed and browser closed")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Error watching video: {e}")
+        return False
 
 # Auto-view function (Daily views for channel Shorts)
 def auto_view():
@@ -76,22 +114,21 @@ def auto_view():
         videos = get_youtube_videos()
         if not videos:
             print("No videos found!")
-            time.sleep(3600)  # Wait 1 hour before retrying
+            time.sleep(3600)
             continue
 
-        num_views = random.randint(1, 5)
+        num_views = random.randint(1, 3)
         for _ in range(num_views):
             video = random.choice(videos)
             if change_ip():
-                watch_video(video)
-                print("✅ View sent!")
-                time.sleep(random.randint(600, 1800))  # Delay before next view
+                if watch_video(video):
+                    print("✅ Real view sent to YouTube!")
+                time.sleep(random.randint(600, 1800))
 
-# Handle /task command (Step-by-step input)
+# Handle /task command
 def task(update: Update, context: CallbackContext):
     user_id = update.message.chat_id
     user_inputs[user_id] = {}
-
     update.message.reply_text("📌 Please enter the YouTube Shorts URL:")
     return
 
@@ -105,10 +142,10 @@ def handle_message(update: Update, context: CallbackContext):
 
     if "url" not in user_inputs[user_id]:
         user_inputs[user_id]["url"] = user_input
-        update.message.reply_text("📌 Enter number of views (Max: 5):")
+        update.message.reply_text("📌 Enter number of views (Max: 3):")
     elif "views" not in user_inputs[user_id]:
-        if not user_input.isdigit() or int(user_input) > 5:
-            update.message.reply_text("❌ Invalid number! Enter a number up to 5:")
+        if not user_input.isdigit() or int(user_input) > 3:
+            update.message.reply_text("❌ Invalid number! Enter a number up to 3:")
             return
         user_inputs[user_id]["views"] = int(user_input)
         update.message.reply_text("📅 Enter date & time (YYYY-MM-DD HH:MM):")
@@ -134,7 +171,7 @@ def confirm_order(update: Update, context: CallbackContext):
 
         query.edit_message_text(f"✅ Order Confirmed:\n📌 {order['url']}\n👀 {order['views']} Views\n📅 {order['datetime']}")
         send_dm(f"📌 New Order Received:\n{order['url']}\n👀 {order['views']} Views\n📅 {order['datetime']}")
-        del user_inputs[user_id]  # Clear user data after confirmation
+        del user_inputs[user_id]
 
 # Handle /status command
 def status(update: Update, context: CallbackContext):
@@ -147,7 +184,6 @@ def status(update: Update, context: CallbackContext):
 
         total_views = sum(task['views'] for task in scheduled_tasks)
         message += f"\n✅ Total Scheduled Views: {total_views}"
-
         update.message.reply_text(message)
 
 # Handle /report command
@@ -168,18 +204,17 @@ def telegram_bot():
     dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
     dp.add_handler(CallbackQueryHandler(confirm_order, pattern="confirm_order"))
 
-    # Use webhook for Render instead of polling
+    # Use webhook for Render
     PORT = int(os.environ.get('PORT', 8080))
     RENDER_EXTERNAL_URL = os.environ.get('RENDER_EXTERNAL_URL')
-    
+
     updater.start_webhook(listen="0.0.0.0",
                           port=PORT,
-                          url_path=TELEGRAM_BOT_TOKEN,
-                          webhook_url=f"{RENDER_EXTERNAL_URL}/{TELEGRAM_BOT_TOKEN}")
+                          url_path="webhook",
+                          webhook_url=f"{RENDER_EXTERNAL_URL}/webhook")
 
-# Run bot & Flask server
+# Run bot
 if __name__ == '__main__':
     login_windscribe()
     Thread(target=telegram_bot).start()
     Thread(target=auto_view).start()
-    app.run(host="0.0.0.0", port=8080)
