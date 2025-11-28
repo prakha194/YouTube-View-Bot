@@ -168,8 +168,14 @@ def telegram_bot():
     dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
     dp.add_handler(CallbackQueryHandler(confirm_order, pattern="confirm_order"))
 
-    updater.start_polling()
-    updater.idle()
+    # Use webhook for Render instead of polling
+    PORT = int(os.environ.get('PORT', 8080))
+    RENDER_EXTERNAL_URL = os.environ.get('RENDER_EXTERNAL_URL')
+    
+    updater.start_webhook(listen="0.0.0.0",
+                          port=PORT,
+                          url_path=TELEGRAM_BOT_TOKEN,
+                          webhook_url=f"{RENDER_EXTERNAL_URL}/{TELEGRAM_BOT_TOKEN}")
 
 # Run bot & Flask server
 if __name__ == '__main__':
