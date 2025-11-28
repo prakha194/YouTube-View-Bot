@@ -12,7 +12,7 @@ import requests
 from flask import Flask
 from threading import Thread
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageHandler, CallbackContext, filters
+from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageHandler, CallbackContext, Filters
 import os
 
 # Load environment variables
@@ -81,7 +81,7 @@ def watch_video(video_url):
             'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
             'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         ]
-        
+
         headers = {
             'User-Agent': random.choice(user_agents)
         }
@@ -187,7 +187,7 @@ def report(update: Update, context: CallbackContext):
 
 # Telegram bot setup
 def telegram_bot():
-    updater = Updater(TELEGRAM_BOT_TOKEN, use_context=True)  # ← use_context=True for v13.15
+    updater = Updater(TELEGRAM_BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
 
     dp.add_handler(CommandHandler("start", start))
@@ -195,12 +195,12 @@ def telegram_bot():
     dp.add_handler(CommandHandler("task", task))
     dp.add_handler(CommandHandler("status", status))
     dp.add_handler(CommandHandler("report", report))
-    dp.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
     dp.add_handler(CallbackQueryHandler(confirm_order, pattern="confirm_order"))
 
     # Use webhook for Render
     PORT = int(os.environ.get('PORT', 8080))
-    
+
     updater.start_webhook(
         listen="0.0.0.0",
         port=PORT,
@@ -211,8 +211,4 @@ def telegram_bot():
 if __name__ == '__main__':
     Thread(target=telegram_bot).start()
     Thread(target=auto_view).start()
-# Run bot
-if __name__ == '__main__':
-    Thread(target=telegram_bot).start()
-    Thread(target=auto_view).start()
-    app.run(host="0.0.0.0", port=8080)  # ← ADD THIS LINE BACK
+    app.run(host="0.0.0.0", port=8080)
