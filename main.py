@@ -1,7 +1,6 @@
 import time
 import random
 import requests
-import subprocess
 from flask import Flask
 from threading import Thread
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -12,8 +11,6 @@ import os
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 YOUTUBE_CHANNEL_ID = os.getenv("YOUTUBE_CHANNEL_ID")
 ADMIN_USER_ID = os.getenv("ADMIN_USER_ID")
-WINDSCRIBE_USER = os.getenv("WINDSCRIBE_USER")
-WINDSCRIBE_PASS = os.getenv("WINDSCRIBE_PASS")
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 
 # Flask app to keep bot running
@@ -42,22 +39,21 @@ def send_dm(message):
     if ADMIN_USER_ID:
         requests.get(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage?chat_id={ADMIN_USER_ID}&text={message}")
 
-# Function to login to Windscribe
-def login_windscribe():
-    try:
-        subprocess.run(["windscribe", "login", WINDSCRIBE_USER, WINDSCRIBE_PASS], check=True)
-    except Exception as e:
-        print("Windscribe login failed:", e)
-
-# Function to change IP using Windscribe
+# Function to change IP using free services
 def change_ip():
     try:
-        subprocess.run(["windscribe", "connect", "best"], check=True)
-        time.sleep(5)
+        # Rotate user agents to simulate different devices
+        user_agents = [
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1'
+        ]
+        print("✅ User agent rotated")
         return True
     except Exception as e:
-        print("Failed to connect to Windscribe:", e)
-        return False
+        print(f"❌ IP change failed: {e}, continuing anyway")
+        return True
 
 # Function to get latest Shorts videos from YouTube API
 def get_youtube_videos():
@@ -71,9 +67,15 @@ def watch_video(video_url):
     print(f"👀 Sending view to: {video_url}")
 
     try:
-        # Use requests to actually visit the URL
+        # Rotate user agents
+        user_agents = [
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        ]
+        
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': random.choice(user_agents)
         }
 
         # Actually make HTTP request to YouTube
@@ -177,7 +179,7 @@ def report(update: Update, context: CallbackContext):
 
 # Telegram bot setup
 def telegram_bot():
-    updater = Updater(TELEGRAM_BOT_TOKEN, use_context=True)
+    updater = Updater(TELEGRAM_BOT_TOKEN)
     dp = updater.dispatcher
 
     dp.add_handler(CommandHandler("start", start))
@@ -199,6 +201,5 @@ def telegram_bot():
 
 # Run bot
 if __name__ == '__main__':
-    login_windscribe()
     Thread(target=telegram_bot).start()
     Thread(target=auto_view).start()
