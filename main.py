@@ -1,3 +1,4 @@
+import imghdr
 import time
 import random
 import requests
