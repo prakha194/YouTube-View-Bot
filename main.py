@@ -1,4 +1,11 @@
-import imghdr
+import sys
+import types
+
+# Create a fake imghdr module to fix the import error
+imghdr = types.ModuleType('imghdr')
+imghdr.what = lambda x: None
+sys.modules['imghdr'] = imghdr
+
 import time
 import random
 import requests
