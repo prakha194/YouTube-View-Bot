@@ -203,3 +203,8 @@ def telegram_bot():
 if __name__ == '__main__':
     Thread(target=telegram_bot).start()
     Thread(target=auto_view).start()
+# Run bot
+if __name__ == '__main__':
+    Thread(target=telegram_bot).start()
+    Thread(target=auto_view).start()
+    app.run(host="0.0.0.0", port=8080)  # ← ADD THIS LINE BACK
