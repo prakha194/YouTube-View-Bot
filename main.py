@@ -179,7 +179,7 @@ def report(update: Update, context: CallbackContext):
 
 # Telegram bot setup
 def telegram_bot():
-    updater = Updater(TELEGRAM_BOT_TOKEN)
+    updater = Updater(TELEGRAM_BOT_TOKEN, update_queue=None)
     dp = updater.dispatcher
 
     dp.add_handler(CommandHandler("start", start))
